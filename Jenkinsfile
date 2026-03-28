@@ -1,26 +1,63 @@
 pipeline {
     agent any
+
     environment {
-        AWS_ACCOUNT_ID="021891594207"
-        AWS_DEFAULT_REGION="eu-west-1"     
+        AWS_DEFAULT_REGION = "eu-west-1"
+        CLUSTER_NAME = "myapp-eks-cluster"
     }
+
     stages {
-        
-        stage('provision eks-cluster') {
-           environment {
-             AWS_ACCESS_KEY_ID = credentials('aws_access_key_id')
-             AWS_SECRET_ACCESS_KEY = credentials('aws_secret_access_key')
-           }
-           steps {
-              script {
-                  //sh "terraform destroy --auto-approve"
-                  sh "terraform init"
-                  sh "terraform plan"
-                  sh " terraform apply --auto-approve"
+
+        stage('Provision EKS Cluster') {
+            steps {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-creds'
+                ]]) {
+
+                    sh '''
+                    terraform init
+                    terraform plan
+                    terraform apply -auto-approve
+                    '''
+                }
             }
         }
-               
-     }
+
+        // 🔴 VERY IMPORTANT
+        stage('Wait for EKS Cluster') {
+            steps {
+                sh '''
+                echo "Waiting for EKS cluster to be ACTIVE..."
+                aws eks wait cluster-active \
+                --region $AWS_DEFAULT_REGION \
+                --name $CLUSTER_NAME
+                '''
+            }
+        }
+
+        stage('Update kubeconfig') {
+            steps {
+                sh '''
+                aws eks update-kubeconfig \
+                --region $AWS_DEFAULT_REGION \
+                --name $CLUSTER_NAME
+                '''
+            }
+        }
+
+        stage('Verify Cluster') {
+            steps {
+                sh 'kubectl get nodes'
+            }
+        }
+
+        // 🔥 NEXT STEP (you can enable later)
+        // stage('Deploy App') {
+        //     steps {
+        //         sh 'kubectl apply -f k8s/'
+        //     }
+        // }
+
     }
-    
 }
