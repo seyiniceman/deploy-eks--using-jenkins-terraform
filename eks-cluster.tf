@@ -12,7 +12,6 @@ terraform {
 
 provider "aws" {
   region = "eu-west-1"
-  # REMOVE 'profile' if running in Jenkins; Jenkins uses Credentials Plugin
 }
 
 ############################################
