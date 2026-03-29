@@ -11,18 +11,11 @@ terraform {
 }
 
 provider "aws" {
-  region = "eu-west-1" # Ireland region (adjust if needed)
+  region = "eu-west-1"
 }
 
 ############################################
-# 2. Required Data Sources (FIX FOR YOUR ERROR)
-############################################
-data "aws_partition" "current" {}
-
-data "aws_caller_identity" "current" {}
-
-############################################
-# 3. EKS Module (v21.x)
+# 2. EKS Module (v21.x)
 ############################################
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
@@ -34,12 +27,8 @@ module "eks" {
   vpc_id     = module.myapp-vpc.vpc_id
   subnet_ids = module.myapp-vpc.private_subnets
 
-  endpoint_public_access = true
+  endpoint_public_access                   = true
   enable_cluster_creator_admin_permissions = true
-
-  # ✅ FIX: explicitly pass these (prevents count error)
-  partition  = data.aws_partition.current.partition
-  account_id = data.aws_caller_identity.current.account_id
 
   tags = {
     environment = "development"
@@ -52,7 +41,7 @@ module "eks" {
       max_size     = 3
       desired_size = 3
 
-      instance_types = ["t3.small"] # 🔥 t2 is deprecated for EKS
+      instance_types = ["t3.small"]
       key_name       = "sf_key"
     }
   }
@@ -61,7 +50,7 @@ module "eks" {
 }
 
 ############################################
-# 4. EKS Data Sources (AFTER CLUSTER CREATION)
+# 3. EKS Data Sources
 ############################################
 data "aws_eks_cluster" "myapp_cluster" {
   name       = module.eks.cluster_name
@@ -74,18 +63,18 @@ data "aws_eks_cluster_auth" "myapp_cluster" {
 }
 
 ############################################
-# 5. Kubernetes Provider
+# 4. Kubernetes Provider
 ############################################
 provider "kubernetes" {
-  host                   = data.aws_eks_cluster.myapp_cluster.endpoint
-  token                  = data.aws_eks_cluster_auth.myapp_cluster.token
+  host  = data.aws_eks_cluster.myapp_cluster.endpoint
+  token = data.aws_eks_cluster_auth.myapp_cluster.token
   cluster_ca_certificate = base64decode(
     data.aws_eks_cluster.myapp_cluster.certificate_authority[0].data
   )
 }
 
 ############################################
-# 6. Outputs
+# 5. Outputs
 ############################################
 output "cluster_id" {
   value = data.aws_eks_cluster.myapp_cluster.id
