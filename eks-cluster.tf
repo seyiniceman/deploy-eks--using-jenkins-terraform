@@ -1,4 +1,4 @@
-# 1. Tells Terraform to use the newer AWS provider
+# 1. AWS Provider and Terraform version constraints
 terraform {
   required_providers {
     aws = {
@@ -8,13 +8,14 @@ terraform {
   }
 }
 
+# 2. Kubernetes provider configuration
 provider "kubernetes" {
     host                   = data.aws_eks_cluster.myapp-cluster.endpoint
     token                  = data.aws_eks_cluster_auth.myapp-cluster.token
     cluster_ca_certificate = base64decode(data.aws_eks_cluster.myapp-cluster.certificate_authority.0.data)
 }
 
-# Updated to use the correct output from the v21 module
+# 3. Data sources for the cluster (using v21 outputs)
 data "aws_eks_cluster" "myapp-cluster" {
     name       = module.eks.cluster_name 
     depends_on = [module.eks]
@@ -25,24 +26,26 @@ data "aws_eks_cluster_auth" "myapp-cluster" {
     depends_on = [module.eks]
 }
 
+# 4. Outputs
 output "cluster_id" {
   value = data.aws_eks_cluster.myapp-cluster.id
 }
 
+# 5. EKS Module (v21.x syntax)
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
-  # Pulls the latest v21 module compatible with AWS Provider v6
-  version = "~> 21.0" 
+  version = "~> 21.0" # Correctly specifies the module version
 
-  name    = "myapp-eks-cluster"
+  # In v21, cluster_name became 'name'
+  name = "myapp-eks-cluster"
   
-  # CHANGED: Renamed from 'version' to 'cluster_version' 
-  # This avoids the conflict with the module's 'version' attribute
-  cluster_version = "1.30"
+  # In v21, cluster_version became 'kubernetes_version' to avoid conflicts
+  kubernetes_version = "1.30"
 
   subnet_ids = module.myapp-vpc.private_subnets
   vpc_id     = module.myapp-vpc.vpc_id
   
+  # In v21, cluster_endpoint_public_access became 'endpoint_public_access'
   endpoint_public_access           = true
   enable_cluster_creator_admin_permissions = true
 
