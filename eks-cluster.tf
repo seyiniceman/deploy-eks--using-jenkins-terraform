@@ -30,6 +30,26 @@ module "eks" {
   endpoint_public_access                   = true
   enable_cluster_creator_admin_permissions = true
 
+  # FIX: Grants your IAM user permission to view/manage nodes in the AWS Console
+  access_entries = {
+    console_access = {
+      principal_arn     = "arn:aws:iam::021891594207:user/myownyolk"
+      policy_associations = {
+        admin = {
+          policy_arn = "arn:aws:iam::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+          access_scope = {
+            type = "cluster"
+          }
+        }
+      }
+    }
+  }
+
+  # FIX: Ensures the new KMS key allows the nodes to talk to the cluster
+  create_kms_key                = true
+  kms_key_enable_default_policy = true
+  kms_key_administrators        = ["arn:aws:iam::021891594207:root"]
+
   tags = {
     environment = "development"
     application = "myapp"
@@ -37,21 +57,23 @@ module "eks" {
 
   eks_managed_node_groups = {
     dev = {
-      # Use t3.small as requested (t2.small is often too small for EKS)
       instance_types = ["t3.small"]
       min_size       = 1
       max_size       = 3
       desired_size   = 3
       key_name       = "sf_key"
+
+      # FIX: Ensures the CNI has permission to assign networking to the nodes
+      iam_role_additional_policies = {
+        AmazonEKS_CNI_Policy = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+      }
     }
   }
-  # REMOVED depends_on = [module.myapp-vpc] to fix "Invalid count argument"
 }
 
 ############################################
-# 3. Kubernetes Provider (Direct from Module)
+# 3. Kubernetes Provider
 ############################################
-# IMPORTANT: In v21, use module outputs directly to avoid "Data Source" chicken-and-egg errors
 provider "kubernetes" {
   host                   = module.eks.cluster_endpoint
   cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
