@@ -12,10 +12,11 @@ terraform {
 
 provider "aws" {
   region = "eu-west-1"
+  # REMOVE 'profile' if running in Jenkins; Jenkins uses Credentials Plugin
 }
 
 ############################################
-# 2. EKS Module (v21.x)
+# 2. EKS Module
 ############################################
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
@@ -37,45 +38,39 @@ module "eks" {
 
   eks_managed_node_groups = {
     dev = {
-      min_size     = 1
-      max_size     = 3
-      desired_size = 3
-
+      # Use t3.small as requested (t2.small is often too small for EKS)
       instance_types = ["t3.small"]
+      min_size       = 1
+      max_size       = 3
+      desired_size   = 3
       key_name       = "sf_key"
     }
   }
-
-  depends_on = [module.myapp-vpc]
+  # REMOVED depends_on = [module.myapp-vpc] to fix "Invalid count argument"
 }
 
 ############################################
-# 3. EKS Data Sources
+# 3. Kubernetes Provider (Direct from Module)
 ############################################
-data "aws_eks_cluster" "myapp_cluster" {
-  name       = module.eks.cluster_name
-  depends_on = [module.eks]
-}
-
-data "aws_eks_cluster_auth" "myapp_cluster" {
-  name       = module.eks.cluster_name
-  depends_on = [module.eks]
-}
-
-############################################
-# 4. Kubernetes Provider
-############################################
+# IMPORTANT: In v21, use module outputs directly to avoid "Data Source" chicken-and-egg errors
 provider "kubernetes" {
-  host  = data.aws_eks_cluster.myapp_cluster.endpoint
-  token = data.aws_eks_cluster_auth.myapp_cluster.token
-  cluster_ca_certificate = base64decode(
-    data.aws_eks_cluster.myapp_cluster.certificate_authority[0].data
-  )
+  host                   = module.eks.cluster_endpoint
+  cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
+
+  exec {
+    api_version = "client.authentication.k8s.io/v1beta1"
+    command     = "aws"
+    args        = ["eks", "get-token", "--cluster-name", module.eks.cluster_name]
+  }
 }
 
 ############################################
-# 5. Outputs
+# 4. Outputs
 ############################################
-output "cluster_id" {
-  value = data.aws_eks_cluster.myapp_cluster.id
+output "cluster_name" {
+  value = module.eks.cluster_name
+}
+
+output "cluster_endpoint" {
+  value = module.eks.cluster_endpoint
 }
