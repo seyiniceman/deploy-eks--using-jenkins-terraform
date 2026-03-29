@@ -33,13 +33,13 @@ module "eks" {
   # Fixes compatibility with AWS Provider v6
   version = "~> 21.0" 
 
-  cluster_name    = "myapp-eks-cluster"
-  cluster_version = "1.30"
+  name    = "myapp-eks-cluster"
+  version = "1.30"
 
   subnet_ids = module.myapp-vpc.private_subnets
   vpc_id     = module.myapp-vpc.vpc_id
   
-  cluster_endpoint_public_access           = true
+  endpoint_public_access           = true
   enable_cluster_creator_admin_permissions = true
 
   tags = {
