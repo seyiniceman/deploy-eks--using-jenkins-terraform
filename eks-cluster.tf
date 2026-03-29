@@ -1,53 +1,45 @@
-# 1. AWS Provider and Terraform version constraints
+############################################
+# 1. Terraform & AWS Provider
+############################################
 terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 6.0" 
+      version = "~> 6.0"
     }
   }
 }
 
-# 2. Kubernetes provider configuration
-provider "kubernetes" {
-    host                   = data.aws_eks_cluster.myapp-cluster.endpoint
-    token                  = data.aws_eks_cluster_auth.myapp-cluster.token
-    cluster_ca_certificate = base64decode(data.aws_eks_cluster.myapp-cluster.certificate_authority.0.data)
+provider "aws" {
+  region = "eu-west-1" # Ireland region (adjust if needed)
 }
 
-# 3. Data sources for the cluster (using v21 outputs)
-data "aws_eks_cluster" "myapp-cluster" {
-    name       = module.eks.cluster_name 
-    depends_on = [module.eks]
-}
+############################################
+# 2. Required Data Sources (FIX FOR YOUR ERROR)
+############################################
+data "aws_partition" "current" {}
 
-data "aws_eks_cluster_auth" "myapp-cluster" {
-    name       = module.eks.cluster_name
-    depends_on = [module.eks]
-}
+data "aws_caller_identity" "current" {}
 
-# 4. Outputs
-output "cluster_id" {
-  value = data.aws_eks_cluster.myapp-cluster.id
-}
-
-# 5. EKS Module (v21.x syntax)
+############################################
+# 3. EKS Module (v21.x)
+############################################
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
-  version = "~> 21.0" # Correctly specifies the module version
+  version = "~> 21.0"
 
-  # In v21, cluster_name became 'name'
-  name = "myapp-eks-cluster"
-  
-  # In v21, cluster_version became 'kubernetes_version' to avoid conflicts
+  name               = "myapp-eks-cluster"
   kubernetes_version = "1.30"
 
-  subnet_ids = module.myapp-vpc.private_subnets
   vpc_id     = module.myapp-vpc.vpc_id
-  
-  # In v21, cluster_endpoint_public_access became 'endpoint_public_access'
-  endpoint_public_access           = true
+  subnet_ids = module.myapp-vpc.private_subnets
+
+  endpoint_public_access = true
   enable_cluster_creator_admin_permissions = true
+
+  # ✅ FIX: explicitly pass these (prevents count error)
+  partition  = data.aws_partition.current.partition
+  account_id = data.aws_caller_identity.current.account_id
 
   tags = {
     environment = "development"
@@ -60,10 +52,41 @@ module "eks" {
       max_size     = 3
       desired_size = 3
 
-      instance_types = ["t2.small"]
+      instance_types = ["t3.small"] # 🔥 t2 is deprecated for EKS
       key_name       = "sf_key"
     }
   }
-  
+
   depends_on = [module.myapp-vpc]
+}
+
+############################################
+# 4. EKS Data Sources (AFTER CLUSTER CREATION)
+############################################
+data "aws_eks_cluster" "myapp_cluster" {
+  name       = module.eks.cluster_name
+  depends_on = [module.eks]
+}
+
+data "aws_eks_cluster_auth" "myapp_cluster" {
+  name       = module.eks.cluster_name
+  depends_on = [module.eks]
+}
+
+############################################
+# 5. Kubernetes Provider
+############################################
+provider "kubernetes" {
+  host                   = data.aws_eks_cluster.myapp_cluster.endpoint
+  token                  = data.aws_eks_cluster_auth.myapp_cluster.token
+  cluster_ca_certificate = base64decode(
+    data.aws_eks_cluster.myapp_cluster.certificate_authority[0].data
+  )
+}
+
+############################################
+# 6. Outputs
+############################################
+output "cluster_id" {
+  value = data.aws_eks_cluster.myapp_cluster.id
 }
