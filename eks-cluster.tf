@@ -1,4 +1,4 @@
-# 1. ADD THIS BLOCK FIRST: Tells Terraform to use the newer AWS provider
+# 1. Tells Terraform to use the newer AWS provider
 terraform {
   required_providers {
     aws = {
@@ -14,8 +14,9 @@ provider "kubernetes" {
     cluster_ca_certificate = base64decode(data.aws_eks_cluster.myapp-cluster.certificate_authority.0.data)
 }
 
+# Updated to use the correct output from the v21 module
 data "aws_eks_cluster" "myapp-cluster" {
-    name       = module.eks.cluster_name
+    name       = module.eks.cluster_name 
     depends_on = [module.eks]
 }
 
@@ -30,11 +31,14 @@ output "cluster_id" {
 
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
-  # Fixes compatibility with AWS Provider v6
+  # Pulls the latest v21 module compatible with AWS Provider v6
   version = "~> 21.0" 
 
   name    = "myapp-eks-cluster"
-  version = "1.30"
+  
+  # CHANGED: Renamed from 'version' to 'cluster_version' 
+  # This avoids the conflict with the module's 'version' attribute
+  cluster_version = "1.30"
 
   subnet_ids = module.myapp-vpc.private_subnets
   vpc_id     = module.myapp-vpc.vpc_id
