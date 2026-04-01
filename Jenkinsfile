@@ -3,6 +3,7 @@ pipeline {
 
     environment {
         AWS_DEFAULT_REGION = "eu-west-1"
+        CLUSTER_NAME       = "myapp-eks-cluster"
         TF_VAR_aws_profile = "" 
     }
 
@@ -15,16 +16,32 @@ pipeline {
             }
         }
 
-        stage('Destroy EKS Infrastructure') {
+        stage('Terraform Apply') {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
-                    // This will remove all 62 resources created today
-                    sh 'terraform destroy -auto-approve -input=false'
+                    sh 'terraform apply -auto-approve -input=false'
+                }
+            }
+        }
+
+        stage('Update kubeconfig & Verify') {
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
+                    sh '''
+                    # Force the AWS CLI to generate a v1beta1 config
+                    aws eks update-kubeconfig --region ${AWS_DEFAULT_REGION} --name ${CLUSTER_NAME}
+
+                    # If the above still fails, manually fix the config file API version
+                    sed -i 's/v1alpha1/v1beta1/g' ~/.kube/config
+
+                    kubectl get nodes
+                    kubectl get pods -A
+                    '''
                 }
             }
         }
     }
-
+    
     post {
         always {
             cleanWs()
