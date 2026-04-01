@@ -3,61 +3,53 @@ pipeline {
 
     environment {
         AWS_DEFAULT_REGION = "eu-west-1"
-        CLUSTER_NAME = "myapp-eks-cluster"
+        CLUSTER_NAME       = "myapp-eks-cluster"
+        // This ensures Terraform uses Jenkins Credentials, not a local profile
+        TF_VAR_aws_profile = "" 
     }
 
     stages {
-
-        stage('Provision EKS Cluster') {
+        stage('Terraform Init') {
             steps {
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
                     credentialsId: 'aws-creds'
                 ]]) {
-
-                    sh '''
-                    terraform init
-                    terraform plan
-                    terraform apply -auto-approve
-                    '''
+                    sh 'terraform init -input=false'
                 }
             }
         }
 
-        // 🔴 VERY IMPORTANT
-        stage('Wait for EKS Cluster') {
+        stage('Terraform Apply') {
             steps {
-                sh '''
-                echo "Waiting for EKS cluster to be ACTIVE..."
-                aws eks wait cluster-active \
-                --region $AWS_DEFAULT_REGION \
-                --name $CLUSTER_NAME
-                '''
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-creds'
+                ]]) {
+                    sh 'terraform apply -auto-approve -input=false'
+                }
             }
         }
 
-        stage('Update kubeconfig') {
+        stage('Update kubeconfig & Verify') {
             steps {
-                sh '''
-                aws eks update-kubeconfig \
-                --region $AWS_DEFAULT_REGION \
-                --name $CLUSTER_NAME
-                '''
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-creds'
+                ]]) {
+                    sh '''
+                    aws eks update-kubeconfig --region ${AWS_DEFAULT_REGION} --name ${CLUSTER_NAME}
+                    kubectl get nodes
+                    kubectl get pods -A
+                    '''
+                }
             }
         }
-
-        stage('Verify Cluster') {
-            steps {
-                sh 'kubectl get nodes'
-            }
+    }
+    
+    post {
+        always {
+            cleanWs()
         }
-
-        // 🔥 NEXT STEP (you can enable later)
-        // stage('Deploy App') {
-        //     steps {
-        //         sh 'kubectl apply -f k8s/'
-        //     }
-        // }
-
     }
 }
