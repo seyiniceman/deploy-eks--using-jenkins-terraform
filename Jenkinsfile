@@ -15,18 +15,25 @@ pipeline {
             }
         }
 
-        stage('Terraform Apply') {
+        stage('Terraform Action') {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
-                    sh 'terraform apply -auto-approve -input=false'
+                    sh """
+                    # APPLY (default)
+                   # terraform apply -auto-approve -input=false
+
+                    # DESTROY (uncomment when needed)
+                     terraform destroy -auto-approve -input=false
+                    """
                 }
             }
         }
 
-        stage('Update kubeconfig & Verify') {
+        stage('Update kubeconfig & Verify (Apply Only)') {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
                     sh """
+                    # Only relevant after APPLY
                     aws eks update-kubeconfig --region ${AWS_DEFAULT_REGION} --name ${CLUSTER_NAME}
 
                     sed -i 's/v1alpha1/v1beta1/g' ~/.kube/config
