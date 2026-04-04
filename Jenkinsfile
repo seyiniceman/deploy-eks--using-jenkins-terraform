@@ -20,10 +20,10 @@ pipeline {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
                     sh """
                     # APPLY (default)
-                    terraform apply -auto-approve -input=false
+                   # terraform apply -auto-approve -input=false
 
                     # DESTROY (uncomment when needed)
-                   #  terraform destroy -auto-approve -input=false
+                      terraform destroy -auto-approve -input=false
                     """
                 }
             }
